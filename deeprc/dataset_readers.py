@@ -55,7 +55,7 @@ def no_sequence_count_scaling(seq_counts: np.ndarray):
 
 def make_dataloaders(task_definition: TaskDefinition, metadata_file: str, repertoiresdata_path: str,
                      split_inds: list = None, n_splits: int = 5, cross_validation_fold: int = 0, rnd_seed: int = 0,
-                     n_worker_processes: int = 4, batch_size: int = 4,
+                     n_worker_processes: int = 1, batch_size: int = 4,
                      inputformat: str = 'NCL', keep_dataset_in_ram: bool = True,
                      sample_n_sequences: int = 10000,
                      metadata_file_id_column: str = 'ID', metadata_file_column_sep: str = '\t',
