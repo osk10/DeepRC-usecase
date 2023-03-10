@@ -297,7 +297,7 @@ class DatasetToHDF5(object):
 
 
 if __name__ == '__main__':
-    n_worker_processes = 5
+    n_worker_processes = 1
     repertoiresdata_directory = f"datasets/example_dataset_format/repertoires"
     output_file = f"datasets/example_dataset_format/repertoires.hdf5"
     print(f"Converting: {repertoiresdata_directory} to {output_file}")
