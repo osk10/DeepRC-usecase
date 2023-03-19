@@ -11,11 +11,11 @@ class Interface:
     def __init__(self):
         # parameters
         self.task_definition = None
-        self.n_update = int(1e3)
+        self.n_updates = int(1e3)
         self.evaluate_at = int(1e2)
         self.kernel_size = 9
         self.n_kernels = 32
-        self.sample_n_sequence = int(1e4)
+        self.sample_n_sequences = int(1e4)
         self.learning_rate = 1e-4
         self.device = "cuda:0"
         self.rnd_seed = 0
@@ -30,9 +30,9 @@ class Interface:
         self.model = None
 
     # Parameters:
-    #   n_update, evaluate_at, kernel_size, n_kernels, sample_n_sequence, learning_rate, device, rnd_seed
+    #   n_updates, evaluate_at, kernel_size, n_kernels, sample_n_sequence, learning_rate, device, rnd_seed
 
-    def parse_arguments(self, n_update: int, evaluate_at: int, kernel_size: int, n_kernels: int, sample_n_sequence: int,
+    def parse_arguments(self, n_updates: int, evaluate_at: int, kernel_size: int, n_kernels: int, sample_n_sequences: int,
                         learning_rate: float, device: str, rnd_seed: int):
         pass
 
@@ -49,8 +49,8 @@ class Interface:
     def get_dataset(self):
         self.trainingset, self.trainingset_eval, self.validationset_eval, self.testset_eval = make_dataloaders(
             task_definition=self.task_definition,
-            metadata_file="../datasets/example_dataset/metadata.tsv",
-            repertoiresdata_path="../datasets/example_dataset/repertoires",
+            metadata_file="datasets/example_dataset/metadata.tsv",
+            repertoiresdata_path="datasets/example_dataset/repertoires",
             metadata_file_id_column='ID',
             sequence_column='amino_acid',
             sequence_counts_column='templates',
@@ -84,7 +84,7 @@ class Interface:
               trainingset_eval_dataloader=self.trainingset_eval, learning_rate=self.learning_rate,
               early_stopping_target_id='binary_target_1',  # Get model that performs best for this task
               validationset_eval_dataloader=self.validationset_eval, n_updates=self.n_updates, evaluate_at=self.evaluate_at,
-              device=self.device, results_directory="results/singletask_cnn"
+              device=self.device, results_directory="results/singletask_cnn_interface"
               # Here our results and trained models will be stored
               )
 
@@ -92,3 +92,12 @@ class Interface:
         print(f"Test scores:\n{scores}")
 
     # Evaluate trained model on testset
+
+
+if __name__ == '__main__':
+    a = Interface()
+
+    a.create_task_definitions()
+    a.get_dataset()
+    a.create_network()
+    a.train()
