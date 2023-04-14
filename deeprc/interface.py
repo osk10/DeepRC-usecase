@@ -5,6 +5,7 @@ from deeprc.task_definitions import TaskDefinition, BinaryTarget, MulticlassTarg
 from deeprc.dataset_readers import make_dataloaders, no_sequence_count_scaling
 from deeprc.architectures import DeepRC, SequenceEmbeddingCNN, AttentionNetwork, OutputNetwork
 from deeprc.training import train, evaluate
+from tqdm import tqdm
 
 
 class Interface:
@@ -40,8 +41,8 @@ class Interface:
         self.task_definition = TaskDefinition(targets=[  # Combines our sub-tasks
             BinaryTarget(  # Add binary
                 # classification task with sigmoid output function
-                column_name='binary_target_1',  # Column name of task in metadata file
-                true_class_value='+',  # Entries with value '+' will be positive class, others will be negative class
+                column_name='signal_disease',  # Column name of task in metadata file
+                true_class_value='True',  # Entries with value '+' will be positive class, others will be negative class
                 pos_weight=1.,  # We can up- or down-weight the positive class if the classes are imbalanced
             ),
         ]).to(device=self.device)
@@ -87,11 +88,74 @@ class Interface:
               device=self.device, results_directory="results/singletask_cnn_interface"
               # Here our results and trained models will be stored
               )
-
+        # Evaluate trained model on testset
         scores = evaluate(model=self.model, dataloader=self.testset_eval, task_definition=self.task_definition, device=self.device)
         print(f"Test scores:\n{scores}")
 
-    # Evaluate trained model on testset
+    # TODO: train model
+    def fit(self):
+        pass
+
+    # TODO: predict and return scores to immuneML -
+    def predict(self):
+        # should return dict signal_disease : [true/false, true/false, ...]
+        scores = evaluate(model=self.model, dataloader=self.testset_eval, task_definition=self.task_definition, device=self.device)
+
+    def predict_proba(self):
+        # should return dict signal_disease : dict false (), dict true ()
+
+        pass
+
+    # from training.py
+    def evaluate(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, task_definition: TaskDefinition,
+                 show_progress: bool = True, device: torch.device = torch.device('cuda:0')) -> dict:
+        """Compute DeepRC model scores on given dataset for tasks specified in `task_definition`
+
+        Parameters
+        ----------
+        model: torch.nn.Module
+             deeprc.architectures.DeepRC or similar model as PyTorch module
+        dataloader: torch.utils.data.DataLoader
+             Data loader for dataset to calculate scores on
+        task_definition: TaskDefinition
+            TaskDefinition object containing the tasks to train the DeepRC model on. See `deeprc/examples/` for examples.
+        show_progress: bool
+             Show progressbar?
+        device: torch.device
+             Device to use for computations. E.g. `torch.device('cuda:0')` or `torch.device('cpu')`.
+
+        Returns
+        ---------
+        scores: dict
+            Nested dictionary of format `{task_id: {score_id: score_value}}`, e.g.
+            `{"binary_task_1": {"auc": 0.6, "bacc": 0.5, "f1": 0.2, "loss": 0.01}}`. The scores returned are computed using
+            the .get_scores() methods of the individual target instances (e.g. `deeprc.task_definitions.BinaryTarget()`).
+            See `deeprc/examples/` for examples.
+        """
+        with torch.no_grad():
+            model.to(device=device)
+            scoring_predictions = []
+
+            for scoring_data in tqdm(dataloader, total=len(dataloader), desc="Evaluating model",
+                                     disable=not show_progress):
+                # Get samples as lists
+                targets, inputs, sequence_lengths, counts_per_sequence, sample_ids = scoring_data
+
+                # Apply attention-based sequence reduction and create minibatch
+                targets, inputs, sequence_lengths, n_sequences = model.reduce_and_stack_minibatch(
+                    targets, inputs, sequence_lengths, counts_per_sequence)
+
+                # Compute predictions from reduced sequences
+                raw_outputs = model(inputs_flat=inputs, sequence_lengths_flat=sequence_lengths,
+                                    n_sequences_per_bag=n_sequences)
+
+                # from taks_defintions.py - BinaryTarget()
+                prediction = torch.sigmoid(raw_outputs).detach()
+                scoring_predictions.append(prediction)
+
+            scoring_predictions = torch.cat(scoring_predictions, dim=0).float().cpu().numpy()
+
+        return scoring_predictions
 
 
 if __name__ == '__main__':
