@@ -33,7 +33,8 @@ class Interface:
     # Parameters:
     #   n_updates, evaluate_at, kernel_size, n_kernels, sample_n_sequence, learning_rate, device, rnd_seed
 
-    def parse_arguments(self, n_updates: int, evaluate_at: int, kernel_size: int, n_kernels: int, sample_n_sequences: int,
+    def parse_arguments(self, n_updates: int, evaluate_at: int, kernel_size: int, n_kernels: int,
+                        sample_n_sequences: int,
                         learning_rate: float, device: str, rnd_seed: int):
         pass
 
@@ -41,24 +42,37 @@ class Interface:
         self.task_definition = TaskDefinition(targets=[  # Combines our sub-tasks
             BinaryTarget(  # Add binary
                 # classification task with sigmoid output function
-                column_name='signal_disease',  # Column name of task in metadata file
-                true_class_value='True',  # Entries with value '+' will be positive class, others will be negative class
+                column_name='binary_target_1',  # Column name of task in metadata file
+                true_class_value='+',  # Entries with value '+' will be positive class, others will be negative class
                 pos_weight=1.,  # We can up- or down-weight the positive class if the classes are imbalanced
             ),
         ]).to(device=self.device)
 
-    def get_dataset(self):
-        self.trainingset, self.trainingset_eval, self.validationset_eval, self.testset_eval = make_dataloaders(
-            task_definition=self.task_definition,
-            metadata_file="datasets/example_dataset/metadata.tsv",
-            repertoiresdata_path="datasets/example_dataset/repertoires",
-            metadata_file_id_column='ID',
-            sequence_column='amino_acid',
-            sequence_counts_column='templates',
-            sample_n_sequences=self.sample_n_sequences,
-            sequence_counts_scaling_fn=no_sequence_count_scaling
-            # Alternative: deeprc.dataset_readers.log_sequence_count_scaling
-        )
+    def get_dataset(self, metadata_file: str = "datasets/example_dataset/metadata.tsv", repertoiresdata_path: str ="datasets/example_dataset/repertoires", one_loader: bool = False):
+        if not one_loader:
+            self.trainingset, self.trainingset_eval, self.validationset_eval, self.testset_eval = make_dataloaders(
+                task_definition=self.task_definition,
+                metadata_file=metadata_file,
+                repertoiresdata_path=repertoiresdata_path,
+                metadata_file_id_column='ID',
+                sequence_column='amino_acid',
+                sequence_counts_column='templates',
+                sample_n_sequences=self.sample_n_sequences,
+                sequence_counts_scaling_fn=no_sequence_count_scaling
+            )
+        else:
+            dataloader = make_dataloaders(
+                task_definition=self.task_definition,
+                metadata_file="datasets/example_dataset/metadata.tsv",
+                repertoiresdata_path="datasets/example_dataset/repertoires",
+                metadata_file_id_column='ID',
+                sequence_column='amino_acid',
+                sequence_counts_column='templates',
+                sample_n_sequences=self.sample_n_sequences,
+                sequence_counts_scaling_fn=no_sequence_count_scaling,
+                one_loader=True
+            )
+            return dataloader
 
     # Create network
     def create_network(self):
@@ -84,54 +98,38 @@ class Interface:
         train(self.model, task_definition=self.task_definition, trainingset_dataloader=self.trainingset,
               trainingset_eval_dataloader=self.trainingset_eval, learning_rate=self.learning_rate,
               early_stopping_target_id='binary_target_1',  # Get model that performs best for this task
-              validationset_eval_dataloader=self.validationset_eval, n_updates=self.n_updates, evaluate_at=self.evaluate_at,
+              validationset_eval_dataloader=self.validationset_eval, n_updates=self.n_updates,
+              evaluate_at=self.evaluate_at,
               device=self.device, results_directory="results/singletask_cnn_interface"
               # Here our results and trained models will be stored
               )
         # Evaluate trained model on testset
-        scores = evaluate(model=self.model, dataloader=self.testset_eval, task_definition=self.task_definition, device=self.device)
+        scores = evaluate(model=self.model, dataloader=self.testset_eval, task_definition=self.task_definition,
+                          device=self.device)
         print(f"Test scores:\n{scores}")
 
-    # TODO: train model
     def fit(self):
-        pass
+        self.create_task_definitions()
+        self.get_dataset()
+        self.create_network()
+        self.train()
 
-    # TODO: predict and return scores to immuneML -
     def predict(self):
-        # should return dict signal_disease : [true/false, true/false, ...]
-        scores = evaluate(model=self.model, dataloader=self.testset_eval, task_definition=self.task_definition, device=self.device)
+        dataset = self.get_dataset(one_loader=True)
+        pred = self.get_predictions(self.model, dataset)
+        a = {"signal_disease": (pred > 0.5)}
+        return {"signal_disease": (pred > 0.5)}
 
     def predict_proba(self):
-        # should return dict signal_disease : dict false (), dict true ()
-
-        pass
+        dataset = self.get_dataset(one_loader=True)
+        pred = self.get_predictions(self.model, dataset)
+        a = {"signal_disease": {True: pred, False: 1 - pred}}
+        return {"signal_disease": {True: pred, False: 1 - pred}}
 
     # from training.py
-    def evaluate(self, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, task_definition: TaskDefinition,
-                 show_progress: bool = True, device: torch.device = torch.device('cuda:0')) -> dict:
-        """Compute DeepRC model scores on given dataset for tasks specified in `task_definition`
-
-        Parameters
-        ----------
-        model: torch.nn.Module
-             deeprc.architectures.DeepRC or similar model as PyTorch module
-        dataloader: torch.utils.data.DataLoader
-             Data loader for dataset to calculate scores on
-        task_definition: TaskDefinition
-            TaskDefinition object containing the tasks to train the DeepRC model on. See `deeprc/examples/` for examples.
-        show_progress: bool
-             Show progressbar?
-        device: torch.device
-             Device to use for computations. E.g. `torch.device('cuda:0')` or `torch.device('cpu')`.
-
-        Returns
-        ---------
-        scores: dict
-            Nested dictionary of format `{task_id: {score_id: score_value}}`, e.g.
-            `{"binary_task_1": {"auc": 0.6, "bacc": 0.5, "f1": 0.2, "loss": 0.01}}`. The scores returned are computed using
-            the .get_scores() methods of the individual target instances (e.g. `deeprc.task_definitions.BinaryTarget()`).
-            See `deeprc/examples/` for examples.
-        """
+    @staticmethod
+    def get_predictions(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
+                        show_progress: bool = True, device: torch.device = torch.device('cuda:0')) -> dict:
         with torch.no_grad():
             model.to(device=device)
             scoring_predictions = []
@@ -155,13 +153,15 @@ class Interface:
 
             scoring_predictions = torch.cat(scoring_predictions, dim=0).float().cpu().numpy()
 
-        return scoring_predictions
+        return np.squeeze(scoring_predictions)
 
 
 if __name__ == '__main__':
     a = Interface()
-
-    a.create_task_definitions()
-    a.get_dataset()
-    a.create_network()
-    a.train()
+    a.fit()
+    #a.predict()
+    #a.predict_proba()
+    # a.create_task_definitions()
+    # a.get_dataset()
+    # a.create_network()
+    # a.train()
