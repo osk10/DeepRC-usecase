@@ -1,6 +1,5 @@
 import zmq
 import json
-import pickle
 import sys
 
 from deeprc.interface import Interface
@@ -30,7 +29,7 @@ def main():
             print(value)
             my_function = getattr(my_class, func_name)
             result = my_function(value)
-            socket.send_pyobj(pickle.dumps(result))
+            socket.send_json(json.dumps(result))
 
 
 if __name__ == "__main__":
