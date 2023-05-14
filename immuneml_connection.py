@@ -27,6 +27,7 @@ def main():
         json_message = socket.recv_json()
 
         for func_name, value in json.loads(json_message).items():
+            print(value)
             my_function = getattr(my_class, func_name)
             result = my_function(value)
             socket.send_pyobj(pickle.dumps(result))

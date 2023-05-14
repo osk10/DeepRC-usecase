@@ -42,13 +42,13 @@ class Interface:
         self.task_definition = TaskDefinition(targets=[  # Combines our sub-tasks
             BinaryTarget(  # Add binary
                 # classification task with sigmoid output function
-                column_name='binary_target_1',  # Column name of task in metadata file
-                true_class_value='+',  # Entries with value '+' will be positive class, others will be negative class
+                column_name='signal_disease',  # Column name of task in metadata file
+                true_class_value='True',  # Entries with value '+' will be positive class, others will be negative class
                 pos_weight=1.,  # We can up- or down-weight the positive class if the classes are imbalanced
             ),
         ]).to(device=self.device)
 
-    def get_dataset(self, metadata_file: str = "datasets/example_dataset/metadata.tsv", repertoiresdata_path: str ="datasets/example_dataset/repertoires", one_loader: bool = False):
+    def get_dataset(self, metadata_file: str, repertoiresdata_path: str, one_loader: bool = False):
         if not one_loader:
             self.trainingset, self.trainingset_eval, self.validationset_eval, self.testset_eval = make_dataloaders(
                 task_definition=self.task_definition,
@@ -63,8 +63,8 @@ class Interface:
         else:
             dataloader = make_dataloaders(
                 task_definition=self.task_definition,
-                metadata_file="datasets/example_dataset/metadata.tsv",
-                repertoiresdata_path="datasets/example_dataset/repertoires",
+                metadata_file=metadata_file,
+                repertoiresdata_path=repertoiresdata_path,
                 metadata_file_id_column='ID',
                 sequence_column='amino_acid',
                 sequence_counts_column='templates',
@@ -86,7 +86,7 @@ class Interface:
                                        n_output_features=self.task_definition.get_n_output_features(), n_layers=1,
                                        n_units=32)
         # Combine networks to DeepRC network
-        self.model = DeepRC(max_seq_len=30, sequence_embedding_network=sequence_embedding_network,
+        self.model = DeepRC(max_seq_len=60, sequence_embedding_network=sequence_embedding_network,
                             attention_network=attention_network,
                             output_network=output_network,
                             consider_seq_counts=False, n_input_features=20, add_positional_information=True,
@@ -97,10 +97,10 @@ class Interface:
     def train(self):
         train(self.model, task_definition=self.task_definition, trainingset_dataloader=self.trainingset,
               trainingset_eval_dataloader=self.trainingset_eval, learning_rate=self.learning_rate,
-              early_stopping_target_id='binary_target_1',  # Get model that performs best for this task
+              early_stopping_target_id='signal_disease',  # Get model that performs best for this task
               validationset_eval_dataloader=self.validationset_eval, n_updates=self.n_updates,
               evaluate_at=self.evaluate_at,
-              device=self.device, results_directory="results/singletask_cnn_interface"
+              device=self.device, results_directory="results/immuneml_may_singletask_cnn_interface"
               # Here our results and trained models will be stored
               )
         # Evaluate trained model on testset
@@ -108,11 +108,12 @@ class Interface:
                           device=self.device)
         print(f"Test scores:\n{scores}")
 
-    def fit(self):
+    def fit(self, data):
         self.create_task_definitions()
-        self.get_dataset()
+        self.get_dataset(data["metadata_filepath"], data["dataset_filepath"])
         self.create_network()
         self.train()
+        return {"status": "finished train"}
 
     def predict(self):
         dataset = self.get_dataset(one_loader=True)
@@ -157,10 +158,11 @@ class Interface:
 
 
 if __name__ == '__main__':
-    a = Interface()
-    a.fit()
+    pass
+    #a = Interface()
+    #a.fit()
     #a.predict()
-    #a.predict_proba()
+    # a.predict_proba()
     # a.create_task_definitions()
     # a.get_dataset()
     # a.create_network()
