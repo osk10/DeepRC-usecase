@@ -115,16 +115,16 @@ class Interface:
         self.train()
         return {"status": "finished train"}
 
-    def predict(self):
-        dataset = self.get_dataset(one_loader=True)
+    def predict(self, data):
+        dataset = self.get_dataset(data["metadata_filepath"], data["dataset_filepath"], one_loader=True)
         pred = self.get_predictions(self.model, dataset)
-        a = {"signal_disease": (pred > 0.5)}
+
         return {"signal_disease": (pred > 0.5)}
 
-    def predict_proba(self):
-        dataset = self.get_dataset(one_loader=True)
+    def predict_proba(self, data):
+        dataset = self.get_dataset(data["metadata_filepath"], data["dataset_filepath"], one_loader=True)
         pred = self.get_predictions(self.model, dataset)
-        a = {"signal_disease": {True: pred, False: 1 - pred}}
+
         return {"signal_disease": {True: pred, False: 1 - pred}}
 
     # from training.py
@@ -160,7 +160,10 @@ class Interface:
 if __name__ == '__main__':
     pass
     #a = Interface()
-    #a.fit()
+    #data = {"metadata_filepath": "datasets/immuneml_testset2/metadata.tsv",
+    #        "dataset_filepath": "datasets/immuneml_testset2/repertoires"}
+
+    #a.fit(data)
     #a.predict()
     # a.predict_proba()
     # a.create_task_definitions()
